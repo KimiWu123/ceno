@@ -239,7 +239,7 @@ impl<const M: usize, const C: usize, E: ExtensionField> UIntLimbs<M, C, E> {
             Self::NUM_LIMBS
         );
         if let UintLimb::WitIn(wires) = &self.limbs {
-            for (wire, limb) in wires.iter().zip(
+            forx (wire, limb) in wires.iter().zip(
                 limbs_values
                     .iter()
                     .map(|v| E::BaseField::from(*v as u64))

@@ -340,10 +340,24 @@ impl<E: ExtensionField> Shl<usize> for Expression<E> {
     }
 }
 
+impl<E: ExtensionField> Shr<usize> for Expression<E> {
+    type Output = Expression<E>;
+    fn shr(self, rhs: usize) -> Expression<E> {
+        self * (1_usize >> rhs)
+    }
+}
+
 impl<E: ExtensionField> Shl<usize> for &Expression<E> {
     type Output = Expression<E>;
     fn shl(self, rhs: usize) -> Expression<E> {
         self.clone() << rhs
+    }
+}
+
+impl<E: ExtensionField> Shr<usize> for &Expression<E> {
+    type Output = Expression<E>;
+    fn shr(self, rhs: usize) -> Expression<E> {
+        self.clone() >> rhs
     }
 }
 
