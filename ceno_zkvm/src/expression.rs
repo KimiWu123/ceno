@@ -5,7 +5,7 @@ use std::{
     fmt::Display,
     iter::{Product, Sum},
     mem::MaybeUninit,
-    ops::{Add, AddAssign, Deref, Mul, MulAssign, Neg, Shl, ShlAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Deref, Mul, MulAssign, Neg, Shl, ShlAssign, Shr, Sub, SubAssign},
 };
 
 use ceno_emul::InsnKind;
@@ -341,10 +341,24 @@ impl<E: ExtensionField> Shl<usize> for Expression<E> {
     }
 }
 
+impl<E: ExtensionField> Shr<usize> for Expression<E> {
+    type Output = Expression<E>;
+    fn shr(self, rhs: usize) -> Expression<E> {
+        self * (1_usize >> rhs)
+    }
+}
+
 impl<E: ExtensionField> Shl<usize> for &Expression<E> {
     type Output = Expression<E>;
     fn shl(self, rhs: usize) -> Expression<E> {
         self.clone() << rhs
+    }
+}
+
+impl<E: ExtensionField> Shr<usize> for &Expression<E> {
+    type Output = Expression<E>;
+    fn shr(self, rhs: usize) -> Expression<E> {
+        self.clone() >> rhs
     }
 }
 

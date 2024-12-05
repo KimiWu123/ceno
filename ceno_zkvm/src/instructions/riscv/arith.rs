@@ -5,7 +5,7 @@ use ff_ext::ExtensionField;
 
 use super::{
     RIVInstruction,
-    constants::{UInt, UInt32},
+    constants::{LIMB_MASK, MAX_RANGE_CHECK, UInt, UInt32},
     r_insn::RInstructionConfig,
 };
 use crate::{
@@ -89,12 +89,10 @@ impl<E: ExtensionField, I: RIVInstruction> Instruction<E> for ArithInstruction<E
     fn assign_instance(
         config: &Self::InstructionConfig,
         instance: &mut [MaybeUninit<E::BaseField>],
-        lk_multiplicity: &mut LkMultiplicity,
+        lkm: &mut LkMultiplicity,
         step: &StepRecord,
     ) -> Result<(), ZKVMError> {
-        config
-            .r_insn
-            .assign_instance(instance, lk_multiplicity, step)?;
+        config.r_insn.assign_instance(instance, lkm, step)?;
 
         let rs2_value = step.rs2().unwrap().value;
         let rs2_read = Value::new_unchecked(rs2_value);
@@ -106,8 +104,22 @@ impl<E: ExtensionField, I: RIVInstruction> Instruction<E> for ArithInstruction<E
                 let rs1_value = step.rs1().unwrap().value;
                 config.rs1_read.assign(instance, &rs1_value);
                 let (ret, overflow) = rs1_value.overflowing_add(rs2_value);
-                config.rd_written.assign(instance, &ret);
+                // config.rd_written.assign(instance, &ret);
+                println!(
+                    "{:#x}_{:#x}",
+                    (ret >> MAX_RANGE_CHECK) & LIMB_MASK,
+                    ret & LIMB_MASK,
+                );
+                lkm.assert_ux::<MAX_RANGE_CHECK>((ret & LIMB_MASK).into());
+                lkm.assert_ux::<MAX_RANGE_CHECK>(((ret >> MAX_RANGE_CHECK) & LIMB_MASK).into());
                 config.rd_written.assign_carries(instance, &[overflow]);
+
+                // let rs1_read = Value::new_unchecked(step.rs1().unwrap().value);
+                // config
+                //     .rs1_read
+                //     .assign_limbs(instance, rs1_read.as_u16_limbs());
+                // let result = rs1_read.add(&rs2_read, lkm, true);
+                // config.rd_written.assign_carries(instance, &result.carries);
             }
 
             InsnKind::SUB => {

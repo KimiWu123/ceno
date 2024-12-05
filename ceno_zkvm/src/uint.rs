@@ -9,7 +9,7 @@ use crate::{
     error::{UtilError, ZKVMError},
     expression::{Expression, ToExpr, WitIn},
     gadgets::{AssertLTConfig, SignedExtendConfig},
-    instructions::riscv::constants::UInt,
+    instructions::riscv::constants::{LIMB_MASK, MAX_RANGE_CHECK, UInt},
     utils::add_one_to_big_num,
     witness::LkMultiplicity,
 };

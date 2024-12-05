@@ -1,6 +1,6 @@
 use ff_ext::ExtensionField;
 use goldilocks::SmallField;
-use itertools::{Itertools, izip};
+use itertools::{Itertools, izip, min};
 
 use super::{UIntLimbs, UintLimb};
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
     error::ZKVMError,
     expression::{Expression, ToExpr, WitIn},
     gadgets::AssertLTConfig,
-    instructions::riscv::config::IsEqualConfig,
+    instructions::riscv::{config::IsEqualConfig, constants::MAX_RANGE_CHECK},
 };
 
 impl<const M: usize, const C: usize, E: ExtensionField> UIntLimbs<M, C, E> {
@@ -21,7 +21,7 @@ impl<const M: usize, const C: usize, E: ExtensionField> UIntLimbs<M, C, E> {
         addend: &Vec<Expression<E>>,
         with_overflow: bool,
     ) -> Result<UIntLimbs<M, C, E>, ZKVMError> {
-        let mut c = UIntLimbs::<M, C, E>::new_unchecked(|| "outcome", cb)?;
+        let mut c = UIntLimbs::<M, C, E>::new_as_empty();
 
         // allocate witness cells and do range checks for carries
         c.alloc_carry_unchecked(|| "add_carry", cb, with_overflow, Self::NUM_LIMBS)?;
@@ -34,7 +34,8 @@ impl<const M: usize, const C: usize, E: ExtensionField> UIntLimbs<M, C, E> {
 
         // perform add operation
         // c[i] = a[i] + b[i] + carry[i-1] - carry[i] * 2 ^ C
-        let outcome = (self.expr())
+        let limbs_expr = self
+            .expr()
             .iter()
             .zip((*addend).iter())
             .enumerate()
@@ -55,15 +56,32 @@ impl<const M: usize, const C: usize, E: ExtensionField> UIntLimbs<M, C, E> {
             })
             .collect::<Result<Vec<Expression<E>>, ZKVMError>>()?;
 
-        let outcom_value = outcome
-            .into_iter()
-            .rev()
-            .reduce(|sum, limb| (sum << C) + limb)
-            .unwrap();
+        // lookup
+        // const LIMB_BITS: usize = core::cmp::min(C, MAX_RANGE_CHECK);
+        limbs_expr.iter().enumerate().for_each(|(i, limb)| {
+            if C > MAX_RANGE_CHECK {
+                let limbs = M.div_ceil(MAX_RANGE_CHECK);
+                (0..limbs).for_each(|i| {
+                    let expr = if i == 0 {
+                        let hi_part = (limb.clone() >> MAX_RANGE_CHECK) - Expression::ZERO;
+                        limb.clone() - (hi_part << MAX_RANGE_CHECK)
+                    } else {
+                        (limb.clone() >> (i * MAX_RANGE_CHECK))
+                    };
+                    println!("{}", i);
+                    cb.assert_ux::<_, _, MAX_RANGE_CHECK>(
+                        || format!("limb_{i}_in_{MAX_RANGE_CHECK}"),
+                        expr,
+                    )
+                    .unwrap();
+                });
+            } else {
+                cb.assert_ux::<_, _, C>(|| format!("limb_{i}_in_{C}"), limb.clone())
+                    .unwrap();
+            }
+        });
 
-        // FIXME: not working bcs
-        // when rs1 = rs2 = 0 and c.carry = 1, rd will be larger than u32::MAX and it's illegal.
-        cb.require_equal(|| "add_eq_check", c.value(), outcom_value)?;
+        c.limbs = UintLimb::Expression(limbs_expr);
 
         Ok(c)
     }
