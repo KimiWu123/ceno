@@ -93,41 +93,23 @@ impl<E: ExtensionField, I: RIVInstruction> Instruction<E> for ArithInstruction<E
     ) -> Result<(), ZKVMError> {
         config.r_insn.assign_instance(instance, lkm, step)?;
 
-        let rs2_value = step.rs2().unwrap().value;
-        let rs2_read = Value::new_unchecked(rs2_value);
-        config.rs2_read.assign(instance, &rs2_value);
+        let rs2_read = Value::new_unchecked(step.rs2().unwrap().value);
+        config.rs2_read.assign_value(instance, rs2_read);
 
         match I::INST_KIND {
             InsnKind::ADD => {
-                // rs1_read + rs2_read = rd_written
-                let rs1_value = step.rs1().unwrap().value;
-                config.rs1_read.assign(instance, &rs1_value);
-                let (ret, overflow) = rs1_value.overflowing_add(rs2_value);
-                // config.rd_written.assign(instance, &ret);
-                println!(
-                    "{:#x}_{:#x}",
-                    (ret >> MAX_RANGE_CHECK) & LIMB_MASK,
-                    ret & LIMB_MASK,
-                );
-                lkm.assert_ux::<MAX_RANGE_CHECK>((ret & LIMB_MASK).into());
-                lkm.assert_ux::<MAX_RANGE_CHECK>(((ret >> MAX_RANGE_CHECK) & LIMB_MASK).into());
-                config.rd_written.assign_carries(instance, &[overflow]);
-
-                // let rs1_read = Value::new_unchecked(step.rs1().unwrap().value);
-                // config
-                //     .rs1_read
-                //     .assign_limbs(instance, rs1_read.as_u16_limbs());
-                // let result = rs1_read.add(&rs2_read, lkm, true);
-                // config.rd_written.assign_carries(instance, &result.carries);
+                let rs1_read = Value::new_unchecked(step.rs1().unwrap().value);
+                config.rs1_read.assign_value(instance, rs1_read);
+                let result = rs1_read.add(&rs2_read, lkm, true);
+                config.rd_written.assign_carries(instance, &result.carries);
             }
 
             InsnKind::SUB => {
                 // rs1_read = rd_written + rs2_read
-                let rd_written = step.rd().unwrap().value.after;
-                config.rd_written.assign(instance, &rd_written);
-                let (ret, overflow) = rs2_value.overflowing_add(rd_written);
-                config.rs1_read.assign(instance, &ret);
-                config.rs1_read.assign_carries(instance, &[overflow]);
+                let rd_written = Value::new(step.rd().unwrap().value.after, lk_multiplicity);
+                config.rd_written.assign_value(instance, rd_written);
+                let result = rs2_read.add(&rd_written, lk_multiplicity, true);
+                config.rs1_read.assign_carries(instance, &result.carries);
             }
 
             _ => unreachable!("Unsupported instruction kind"),

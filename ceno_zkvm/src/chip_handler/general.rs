@@ -283,6 +283,7 @@ impl<'a, E: ExtensionField> CircuitBuilder<'a, E> {
         N: FnOnce() -> NR,
     {
         match C {
+            32 => self.assert_u16(name_fn, expr),
             16 => self.assert_u16(name_fn, expr),
             14 => self.assert_u14(name_fn, expr),
             8 => self.assert_byte(name_fn, expr),

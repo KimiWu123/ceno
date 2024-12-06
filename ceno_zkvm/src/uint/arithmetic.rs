@@ -52,34 +52,12 @@ impl<const M: usize, const C: usize, E: ExtensionField> UIntLimbs<M, C, E> {
                     limb_expr = limb_expr.clone() - next_carry.unwrap().expr() * Self::POW_OF_C;
                 }
 
+                cb.assert_ux::<_, _, C>(|| format!("limb_{i}_in_{C}"), limb.clone())
+                    .unwrap();
+
                 Ok(limb_expr)
             })
             .collect::<Result<Vec<Expression<E>>, ZKVMError>>()?;
-
-        // lookup
-        // const LIMB_BITS: usize = core::cmp::min(C, MAX_RANGE_CHECK);
-        limbs_expr.iter().enumerate().for_each(|(i, limb)| {
-            if C > MAX_RANGE_CHECK {
-                let limbs = M.div_ceil(MAX_RANGE_CHECK);
-                (0..limbs).for_each(|i| {
-                    let expr = if i == 0 {
-                        let hi_part = (limb.clone() >> MAX_RANGE_CHECK) - Expression::ZERO;
-                        limb.clone() - (hi_part << MAX_RANGE_CHECK)
-                    } else {
-                        (limb.clone() >> (i * MAX_RANGE_CHECK))
-                    };
-                    println!("{}", i);
-                    cb.assert_ux::<_, _, MAX_RANGE_CHECK>(
-                        || format!("limb_{i}_in_{MAX_RANGE_CHECK}"),
-                        expr,
-                    )
-                    .unwrap();
-                });
-            } else {
-                cb.assert_ux::<_, _, C>(|| format!("limb_{i}_in_{C}"), limb.clone())
-                    .unwrap();
-            }
-        });
 
         c.limbs = UintLimb::Expression(limbs_expr);
 
