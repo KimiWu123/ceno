@@ -4,7 +4,7 @@ use std::{
     cmp::max,
     fmt::Display,
     iter::{Product, Sum},
-    ops::{Add, AddAssign, Deref, Mul, MulAssign, Neg, Shl, ShlAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Deref, Mul, MulAssign, Neg, Shl, ShlAssign, Shr, Sub, SubAssign},
 };
 
 use ceno_emul::InsnKind;

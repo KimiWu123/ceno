@@ -52,7 +52,7 @@ impl<const M: usize, const C: usize, E: ExtensionField> UIntLimbs<M, C, E> {
                     limb_expr = limb_expr.clone() - next_carry.unwrap().expr() * Self::POW_OF_C;
                 }
 
-                cb.assert_ux::<_, _, C>(|| format!("limb_{i}_in_{C}"), limb.clone())
+                cb.assert_ux::<_, _, C>(|| format!("limb_{i}_in_{C}"), limb_expr.clone())
                     .unwrap();
 
                 Ok(limb_expr)

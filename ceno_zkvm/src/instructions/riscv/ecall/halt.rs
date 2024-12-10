@@ -50,7 +50,7 @@ impl<E: ExtensionField> Instruction<E> for HaltInstruction<E> {
             E::BaseField::from(ceno_emul::Platform::reg_arg0() as u64),
             prev_x10_ts.expr(),
             ecall_cfg.ts.expr() + Tracer::SUBCYCLE_RS2,
-            exit_code.iter().map(|e| e.expr()).collect_vec(),
+            exit_code.iter().map(|e| e.expr()).collect(),
         )?;
 
         Ok(HaltConfig {

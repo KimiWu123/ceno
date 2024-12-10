@@ -4,6 +4,7 @@ mod logic;
 pub mod util;
 
 use crate::{
+    AllowedTypes,
     chip_handler::{AddressExpr, MemoryExpr, RegisterExpr},
     circuit_builder::CircuitBuilder,
     error::{UtilError, ZKVMError},
@@ -224,10 +225,20 @@ impl<const M: usize, const C: usize, E: ExtensionField> UIntLimbs<M, C, E> {
         self.assign_carries_auxiliary(instance, lkm, &value.carries, value.max_carry_value)
     }
 
-    pub fn assign(&self, instance: &mut [E::BaseField], limb_value: &u32) {
+    pub fn assign<T: AllowedTypes>(&self, instance: &mut [E::BaseField], limbs_values: &[T]) {
+        // if let UintLimb::WitIn(wires) = &self.limbs {
+        //     instance[wires[0].id as usize] =
+        //         MaybeUninit::new(E::BaseField::from(*limb_value as u64));
+        // }
         if let UintLimb::WitIn(wires) = &self.limbs {
-            instance[wires[0].id as usize] =
-                MaybeUninit::new(E::BaseField::from(*limb_value as u64));
+            for (wire, limb) in wires.iter().zip(
+                limbs_values
+                    .iter()
+                    .map(|v| E::BaseField::from(v.clone().into_u64()))
+                    .chain(std::iter::repeat(E::BaseField::ZERO)),
+            ) {
+                instance[wire.id as usize] = limb;
+            }
         }
     }
 
@@ -239,7 +250,7 @@ impl<const M: usize, const C: usize, E: ExtensionField> UIntLimbs<M, C, E> {
             Self::NUM_LIMBS
         );
         if let UintLimb::WitIn(wires) = &self.limbs {
-            forx (wire, limb) in wires.iter().zip(
+            for (wire, limb) in wires.iter().zip(
                 limbs_values
                     .iter()
                     .map(|v| E::BaseField::from(*v as u64))

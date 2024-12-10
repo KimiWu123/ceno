@@ -9,8 +9,8 @@ use super::{
     r_insn::RInstructionConfig,
 };
 use crate::{
-    circuit_builder::CircuitBuilder, error::ZKVMError, instructions::Instruction, uint::Value,
-    witness::LkMultiplicity,
+    circuit_builder::CircuitBuilder, error::ZKVMError, instructions::Instruction,
+    uint_value::Value, witness::LkMultiplicity,
 };
 
 /// This config handles R-Instructions that represent registers values as 2 * u16.
@@ -88,27 +88,29 @@ impl<E: ExtensionField, I: RIVInstruction> Instruction<E> for ArithInstruction<E
     fn assign_instance(
         config: &Self::InstructionConfig,
         instance: &mut [<E as ExtensionField>::BaseField],
-        lk_multiplicity: &mut LkMultiplicity,
+        lkm: &mut LkMultiplicity,
         step: &StepRecord,
     ) -> Result<(), ZKVMError> {
         config.r_insn.assign_instance(instance, lkm, step)?;
 
-        let rs2_read = Value::new_unchecked(step.rs2().unwrap().value);
-        config.rs2_read.assign_value(instance, rs2_read);
+        let rs2_read = Value::<_, 32>::new_unchecked(step.rs2().unwrap().value.into());
+        config.rs2_read.assign::<u32>(instance, rs2_read.as_limbs());
 
         match I::INST_KIND {
             InsnKind::ADD => {
-                let rs1_read = Value::new_unchecked(step.rs1().unwrap().value);
-                config.rs1_read.assign_value(instance, rs1_read);
+                let rs1_read = Value::<_, 32>::new_unchecked(step.rs1().unwrap().value.into());
+                config.rs1_read.assign::<u32>(instance, rs1_read.as_limbs());
                 let result = rs1_read.add(&rs2_read, lkm, true);
                 config.rd_written.assign_carries(instance, &result.carries);
             }
 
             InsnKind::SUB => {
                 // rs1_read = rd_written + rs2_read
-                let rd_written = Value::new(step.rd().unwrap().value.after, lk_multiplicity);
-                config.rd_written.assign_value(instance, rd_written);
-                let result = rs2_read.add(&rd_written, lk_multiplicity, true);
+                let rd_written = Value::<_, 32>::new(step.rd().unwrap().value.after.into(), lkm);
+                config
+                    .rd_written
+                    .assign::<u32>(instance, rd_written.as_limbs());
+                let result = rs2_read.add(&rd_written, lkm, true);
                 config.rs1_read.assign_carries(instance, &result.carries);
             }
 
@@ -186,8 +188,11 @@ mod test {
         .unwrap();
 
         // verify rd_written
-        let expected_rd_written =
-            UInt::from_const_unchecked(Value::new_unchecked(outcome).as_u16_limbs().to_vec());
+        let expected_rd_written = UInt32::from_const_unchecked(
+            Value::<u32, 32>::new_unchecked(outcome as u64)
+                .as_limbs()
+                .to_vec(),
+        );
         let rd_written_expr = cb.get_debug_expr(DebugIndex::RdWrite as usize)[0].clone();
         cb.require_equal(
             || "assert_rd_written",

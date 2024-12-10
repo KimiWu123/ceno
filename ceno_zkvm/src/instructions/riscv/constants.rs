@@ -16,7 +16,6 @@ pub const LIMB_MASK: u32 = 0xFFFF;
 
 pub const MAX_RANGE_CHECK: usize = 16;
 
-#[cfg(feature = "riv32")]
 pub const BIT_WIDTH: usize = 32usize;
 
 pub type UInt<E> = UIntLimbs<BIT_WIDTH, LIMB_BITS, E>;
