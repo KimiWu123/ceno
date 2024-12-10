@@ -230,7 +230,7 @@ impl<E: ExtensionField> WriteRD<E> {
         //     instance,
         //     Value::new_unchecked(op.value.before).as_u16_limbs(),
         // );
-        self.prev_value.assign(instance, &op.value.before);
+        self.prev_value.assign::<u32>(instance, &[op.value.before]);
 
         // Register write
         self.lt_cfg.assign_instance(

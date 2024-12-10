@@ -19,10 +19,12 @@ pub mod state;
 pub mod stats;
 pub mod structs;
 mod uint;
+mod uint_value;
 mod utils;
 mod virtual_polys;
 mod witness;
 
 pub use structs::ROMType;
 pub use uint::Value;
+pub use uint_value::AllowedTypes;
 pub use utils::with_panic_hook;
