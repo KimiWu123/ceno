@@ -3,10 +3,14 @@ use std::marker::PhantomData;
 use ceno_emul::{InsnKind, StepRecord};
 use ff_ext::ExtensionField;
 
-use super::{RIVInstruction, constants::UInt, r_insn::RInstructionConfig};
+use super::{
+    RIVInstruction,
+    constants::{LIMB_MASK, MAX_RANGE_CHECK, UInt, UInt32},
+    r_insn::RInstructionConfig,
+};
 use crate::{
-    circuit_builder::CircuitBuilder, error::ZKVMError, instructions::Instruction, uint::Value,
-    witness::LkMultiplicity,
+    circuit_builder::CircuitBuilder, error::ZKVMError, instructions::Instruction,
+    uint_value::Value, witness::LkMultiplicity,
 };
 
 /// This config handles R-Instructions that represent registers values as 2 * u16.
@@ -14,9 +18,9 @@ use crate::{
 pub struct ArithConfig<E: ExtensionField> {
     r_insn: RInstructionConfig<E>,
 
-    rs1_read: UInt<E>,
-    rs2_read: UInt<E>,
-    rd_written: UInt<E>,
+    rs1_read: UInt32<E>,
+    rs2_read: UInt32<E>,
+    rd_written: UInt32<E>,
 }
 
 pub struct ArithInstruction<E, I>(PhantomData<(E, I)>);
@@ -40,29 +44,25 @@ impl<E: ExtensionField, I: RIVInstruction> Instruction<E> for ArithInstruction<E
         format!("{:?}", I::INST_KIND)
     }
 
-    fn construct_circuit(
-        circuit_builder: &mut CircuitBuilder<E>,
-    ) -> Result<Self::InstructionConfig, ZKVMError> {
+    fn construct_circuit(cb: &mut CircuitBuilder<E>) -> Result<Self::InstructionConfig, ZKVMError> {
         let (rs1_read, rs2_read, rd_written) = match I::INST_KIND {
             InsnKind::ADD => {
                 // rd_written = rs1_read + rs2_read
-                let rs1_read = UInt::new_unchecked(|| "rs1_read", circuit_builder)?;
-                let rs2_read = UInt::new_unchecked(|| "rs2_read", circuit_builder)?;
-                let rd_written = rs1_read.add(|| "rd_written", circuit_builder, &rs2_read, true)?;
+                let rs1_read = UInt32::new_unchecked(|| "rs1_read", cb)?;
+                let rs2_read = UInt32::new_unchecked(|| "rs2_read", cb)?;
+                let rd_written = rs1_read.add(|| "rd_written", cb, &rs2_read, true)?;
                 (rs1_read, rs2_read, rd_written)
             }
 
             InsnKind::SUB => {
                 // rd_written + rs2_read = rs1_read
                 // rd_written is the new value to be updated in register so we need to constrain its range.
-                let rd_written = UInt::new(|| "rd_written", circuit_builder)?;
-                let rs2_read = UInt::new_unchecked(|| "rs2_read", circuit_builder)?;
-                let rs1_read = rs2_read.clone().add(
-                    || "rs1_read",
-                    circuit_builder,
-                    &rd_written.clone(),
-                    true,
-                )?;
+                let rd_written = UInt32::new_unchecked(|| "rd_written", cb)?;
+                let rs2_read = UInt32::new_unchecked(|| "rs2_read", cb)?;
+                let rs1_read =
+                    rs2_read
+                        .clone()
+                        .add(|| "rs1_read", cb, &rd_written.clone(), true)?;
                 (rs1_read, rs2_read, rd_written)
             }
 
@@ -70,7 +70,7 @@ impl<E: ExtensionField, I: RIVInstruction> Instruction<E> for ArithInstruction<E
         };
 
         let r_insn = RInstructionConfig::construct_circuit(
-            circuit_builder,
+            cb,
             I::INST_KIND,
             rs1_read.register_expr(),
             rs2_read.register_expr(),
@@ -88,36 +88,29 @@ impl<E: ExtensionField, I: RIVInstruction> Instruction<E> for ArithInstruction<E
     fn assign_instance(
         config: &Self::InstructionConfig,
         instance: &mut [<E as ExtensionField>::BaseField],
-        lk_multiplicity: &mut LkMultiplicity,
+        lkm: &mut LkMultiplicity,
         step: &StepRecord,
     ) -> Result<(), ZKVMError> {
-        config
-            .r_insn
-            .assign_instance(instance, lk_multiplicity, step)?;
+        config.r_insn.assign_instance(instance, lkm, step)?;
 
-        let rs2_read = Value::new_unchecked(step.rs2().unwrap().value);
-        config
-            .rs2_read
-            .assign_limbs(instance, rs2_read.as_u16_limbs());
+        let rs2_read = Value::<_, 32>::new_unchecked(step.rs2().unwrap().value.into());
+        config.rs2_read.assign::<u32>(instance, rs2_read.as_limbs());
 
         match I::INST_KIND {
             InsnKind::ADD => {
-                // rs1_read + rs2_read = rd_written
-                let rs1_read = Value::new_unchecked(step.rs1().unwrap().value);
-                config
-                    .rs1_read
-                    .assign_limbs(instance, rs1_read.as_u16_limbs());
-                let result = rs1_read.add(&rs2_read, lk_multiplicity, true);
+                let rs1_read = Value::<_, 32>::new_unchecked(step.rs1().unwrap().value.into());
+                config.rs1_read.assign::<u32>(instance, rs1_read.as_limbs());
+                let result = rs1_read.add(&rs2_read, lkm, true);
                 config.rd_written.assign_carries(instance, &result.carries);
             }
 
             InsnKind::SUB => {
                 // rs1_read = rd_written + rs2_read
-                let rd_written = Value::new(step.rd().unwrap().value.after, lk_multiplicity);
+                let rd_written = Value::<_, 32>::new(step.rd().unwrap().value.after.into(), lkm);
                 config
                     .rd_written
-                    .assign_limbs(instance, rd_written.as_u16_limbs());
-                let result = rs2_read.add(&rd_written, lk_multiplicity, true);
+                    .assign::<u32>(instance, rd_written.as_limbs());
+                let result = rs2_read.add(&rd_written, lkm, true);
                 config.rs1_read.assign_carries(instance, &result.carries);
             }
 
@@ -195,8 +188,11 @@ mod test {
         .unwrap();
 
         // verify rd_written
-        let expected_rd_written =
-            UInt::from_const_unchecked(Value::new_unchecked(outcome).as_u16_limbs().to_vec());
+        let expected_rd_written = UInt32::from_const_unchecked(
+            Value::<u32, 32>::new_unchecked(outcome as u64)
+                .as_limbs()
+                .to_vec(),
+        );
         let rd_written_expr = cb.get_debug_expr(DebugIndex::RdWrite as usize)[0].clone();
         cb.require_equal(
             || "assert_rd_written",

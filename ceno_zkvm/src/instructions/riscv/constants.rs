@@ -14,6 +14,8 @@ pub const PUBLIC_IO_IDX: usize = 6;
 pub const LIMB_BITS: usize = 16;
 pub const LIMB_MASK: u32 = 0xFFFF;
 
+pub const MAX_RANGE_CHECK: usize = 16;
+
 pub const BIT_WIDTH: usize = 32usize;
 
 pub type UInt<E> = UIntLimbs<BIT_WIDTH, LIMB_BITS, E>;
@@ -21,3 +23,5 @@ pub type UIntMul<E> = UIntLimbs<{ 2 * BIT_WIDTH }, LIMB_BITS, E>;
 /// use UInt<x> for x bits limb size
 pub type UInt8<E> = UIntLimbs<BIT_WIDTH, 8, E>;
 pub const UINT_LIMBS: usize = BIT_WIDTH.div_ceil(LIMB_BITS);
+
+pub type UInt32<E> = UIntLimbs<BIT_WIDTH, BIT_WIDTH, E>;
